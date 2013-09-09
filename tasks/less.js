@@ -18,7 +18,7 @@ module.exports = function(grunt) {
 
   var lessOptions = {
     parse: ['paths', 'optimization', 'filename', 'strictImports', 'syncImport', 'dumpLineNumbers', 'relativeUrls', 'rootpath'],
-    render: ['compress', 'yuicompress', 'ieCompat', 'strictMath']
+    render: ['compress', 'yuicompress', 'ieCompat', 'strictMath', 'sourceMap', 'cleancss', 'sourceMapFilename', 'sourceMapOutputFilename', 'sourceMapBasepath', 'sourceMapRootpath', 'writeSourceMap', 'maxLineLen', 'strictUnits']
   };
 
   grunt.registerMultiTask('less', 'Compile LESS files to CSS', function() {
@@ -33,6 +33,8 @@ module.exports = function(grunt) {
 
     grunt.util.async.forEachSeries(this.files, function(f, nextFileObj) {
       var destFile = f.dest;
+      options.skipSourceMap = false;
+      options.dest = destFile;
 
       var files = f.src.filter(function(filepath) {
         // Warn on and remove invalid source files (if nonull was set).
@@ -51,6 +53,11 @@ module.exports = function(grunt) {
 
         // No src files, goto next target. Warn would have been issued above.
         return nextFileObj();
+      }
+
+      if(files.length > 1 && options.sourceMap) {
+        grunt.log.warn('Source map not written for ' + destFile.cyan + ' because multiple source files are listed.');
+        options.skipSourceMap = true;
       }
 
       var compiledMax = [], compiledMin = [];
@@ -88,6 +95,15 @@ module.exports = function(grunt) {
   var compileLess = function(srcFile, options, callback) {
     options = grunt.util._.extend({filename: srcFile}, options);
     options.paths = options.paths || [path.dirname(srcFile)];
+    if (options.sourceMap && !options.skipSourceMap) {
+      options.sourceMapOutputFilename = options.dest;
+      options.sourceMapFullFilename = options.sourceMapOutputFilename + '.map';
+      options.sourceMapFilename = path.basename(options.sourceMapFullFilename);
+      options.sourceMapRootpath = options.sourceMapRootpath || "";
+      options.writeSourceMap = function(output){
+        writeSourceMap(options, output);
+      };
+    }
 
     var css;
     var srcCode = grunt.file.read(srcFile);
@@ -130,5 +146,11 @@ module.exports = function(grunt) {
       result.max = tree.toCSS();
     }
     return result;
+  };
+
+  var writeSourceMap = function(options, output) {
+    var filename = options.sourceMapFullFilename || options.sourceMapFilename;
+    grunt.file.write(filename, output, {encoding:'utf8'});
+    grunt.log.writeln('File ' + filename.cyan + ' created.');
   };
 };
